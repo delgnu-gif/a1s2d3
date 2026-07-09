@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ko" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <!-- 모바일 환경을 위한 기본 뷰포트 설정 (확대/축소 방지 및 꽉 찬 화면 대응) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- iOS 전용 웹앱(PWA) 최적화 메타 태그 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="LED 전광판">
+    
+    <!-- Android (크롬, 삼성인터넷) 상단 주소창 테마 컬러 매칭 (동적 변경 예정) -->
+    <meta name="theme-color" id="browserThemeColor" content="#0B0F19">
+    
+    <title>Bright & Modern LED 전광판 (OS Optimized)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        neonMint: '#00F5D4',
+                        neonPink: '#FF007F',
+                        neonBlue: '#00F0FF',
+                        darkBg: '#0B0F19',
+                        darkCard: '#161F30'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts 및 FontAwesome 아이콘 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Orbitron:wght@700&family=Bungee+Shade&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* 기기별 물리 폰트 렌더링 최적화 */
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            user-select: none;
+            -webkit-user-select: none; /* iOS 텍스트 돋보기 및 드래그 원천 방지 */
+            -webkit-tap-highlight-color: transparent; /* iOS 클릭 시 발생하는 회색 음영 하이라이트 제거 */
+            overscroll-behavior-y: contain; /* iOS Safari 풀다운 리프레시 방지 */
+        }
+
+        /* 폰트 정의 */
+        .font-gothic { font-family: 'Noto Sans KR', sans-serif; font-weight: 700; }
+        .font-impact { font-family: 'Black Han Sans', sans-serif; }
+        .font-neon { font-family: 'Orbitron', sans-serif; }
+        .font-pattern { font-family: 'Bungee Shade', sans-serif; }
+        .font-cute { font-family: 'Jua', sans-serif; }
+
+        /* 모바일 기기 노치 및 홈 바 지원 (Safe Area) */
+        .safe-padding-top {
+            padding-top: env(safe-area-inset-top, 0px);
+        }
+        .safe-padding-bottom {
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        /* LED 미세 도트 오버레이 */
+        .led-dot-overlay {
+            background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                              linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+        }
+
+        /* 흐르는 텍스트 가속화 및 배치 컨테이너 */
+        .marquee-container {
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .marquee-content {
+            white-space: nowrap;
+            display: inline-block;
+            will-change: transform;
+        }
+
+        /* 다이내믹 네온 글로우 필터 */
+        .neon-glow-active {
+            text-shadow: 0 0 8px var(--glow-color), 
+                         0 0 16px var(--glow-color), 
+                         0 0 32px var(--glow-color);
+        }
+
+        /* 모바일 스크롤 제거 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 모바일 가로 강제 회전시 꽉 채우기 계산 */
+        .force-landscape {
+            transform: rotate(90deg);
+            transform-origin: bottom left;
+            position: absolute;
+            top: -100vw;
+            left: 0;
+            width: 100vh;
+            height: 100vw;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-darkBg dark:text-gray-100 transition-colors duration-300 h-full overflow-hidden select-none">
+
+    <!-- 모바일 최적화 감싸기 컨테이너 -->
+    <div id="app" class="h-full flex flex-col max-w-md mx-auto bg-white dark:bg-darkBg shadow-2xl relative overflow-hidden safe-padding-bottom">
+        
+        <!-- ==============================================
+             [상단 40%] 실시간 미리보기 (PREVIEW) AREA
+             ============================================== -->
+        <div class="h-[38%] bg-black relative flex items-center justify-center overflow-hidden border-b border-gray-200 dark:border-gray-800 safe-padding-top">
+            <!-- LED 격자 망 오버레이 (체크박스로 활성화) -->
+            <div id="previewOverlay" class="absolute inset-0 led-dot-overlay pointer-events-none z-10 hidden"></div>
+            
+            <!-- 실제 미리보기 컨테이너 -->
+            <div id="previewContainer" class="w-full h-full flex items-center justify-center p-4 transition-all duration-300" style="background-color: #000000;">
+                <div class="marquee-container" id="previewMarqueeContainer">
+                    <div id="previewText" class="marquee-content font-neon leading-none select-none text-neonMint" style="font-size: 3.5rem; --glow-color: #00F5D4;">
+                        전광판 앱
+                    </div>
+                </div>
+            </div>
+
+            <!-- 미니 배지 라벨 -->
+            <div class="absolute top-3 left-4 z-20 flex items-center gap-2">
+                <span class="text-[10px] font-bold tracking-widest px-2.5 py-1 rounded-full bg-white/10 text-white backdrop-blur-sm border border-white/20">PREVIEW</span>
+            </div>
+
+            <!-- 다크모드/라이트모드 수동전환 버튼 -->
+            <div class="absolute top-3 right-4 z-20 flex gap-2">
+                <button onclick="handleOSInteraction(); toggleDarkMode()" class="p-2.5 rounded-full bg-white/10 text-white backdrop-blur-sm active:scale-90 hover:bg-white/20 transition-all border border-white/20" title="화면 테마 변경">
+                    <i id="themeIcon" class="fas fa-moon text-xs"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==============================================
+             [하단 62%] 컨트롤 패널 (CONTROLLER) AREA
+             ============================================== -->
+        <div class="h-[62%] overflow-y-auto no-scrollbar px-5 py-4 space-y-5 bg-gray-50 dark:bg-darkBg flex flex-col justify-between">
+            
+            <div class="space-y-4">
+                <!-- 1. 문구 입력창 -->
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">응원 문구 입력</label>
+                    <div class="relative flex items-center">
+                        <input type="text" id="inputText" value="LED 전광판 앱" oninput="updateText()" 
+                               placeholder="메시지를 입력하세요" 
+                               class="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-darkCard focus:outline-none focus:ring-2 focus:ring-neonMint dark:focus:ring-neonMint transition-all font-semibold shadow-sm text-sm" />
+                        <button onclick="handleOSInteraction(); clearText()" class="absolute right-3.5 p-1 text-gray-400 active:scale-90 hover:text-gray-600 dark:hover:text-white transition-all">
+                            <i class="fas fa-times-circle text-base"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. 프리셋 퀵 버튼 -->
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">빠른 템플릿</label>
+                    <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                        <button onclick="handleOSInteraction(); applyPreset('💜 BTS 💜', '#FF007F', '#120024', 'font-pattern', 'scroll-left', 6)" class="flex-shrink-0 px-3.5 py-2 rounded-lg text-xs font-bold bg-pink-100 text-pink-600 dark:bg-pink-950/40 dark:text-pink-300 border border-pink-200 dark:border-pink-900/50 active:scale-95 transition-transform">💜 BTS</button>
+                        <button onclick="handleOSInteraction(); applyPreset('⚽ 대한민국 화이팅!', '#00F0FF', '#000814', 'font-impact', 'blink', 5)" class="flex-shrink-0 px-3.5 py-2 rounded-lg text-xs font-bold bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50 active:scale-95 transition-transform">⚽ 대~한민국</button>
+                        <button onclick="handleOSInteraction(); applyPreset('TAXI HERE 🚕', '#F3B300', '#000000', 'font-neon', 'scroll-right', 4)" class="flex-shrink-0 px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 active:scale-95 transition-transform">🚕 택시잡기</button>
+                        <button onclick="handleOSInteraction(); applyPreset('🚨 긴급 상황', '#FF0000', '#000000', 'font-gothic', 'blink', 8)" class="flex-shrink-0 px-3.5 py-2 rounded-lg text-xs font-bold bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/50 active:scale-95 transition-transform">🚨 비상</button>
+                    </div>
+                </div>
+
+                <!-- 3. 폰트 스타일 선택 -->
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">글꼴 스타일</label>
+                    <div class="grid grid-cols-4 gap-1.5">
+                        <button onclick="handleOSInteraction(); setFont('font-gothic')" id="btn-font-gothic" class="font-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">고딕</button>
+                        <button onclick="handleOSInteraction(); setFont('font-impact')" id="btn-font-impact" class="font-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">꽉찬체</button>
+                        <button onclick="handleOSInteraction(); setFont('font-neon')" id="btn-font-neon" class="font-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">미래체</button>
+                        <button onclick="handleOSInteraction(); setFont('font-pattern')" id="btn-font-pattern" class="font-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">네온선</button>
+                    </div>
+                </div>
+
+                <!-- 4. 색상 설정 (글자색 / 배경색) -->
+                <div class="grid grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">글자 색상</label>
+                        <div class="flex items-center gap-1.5">
+                            <!-- 컬러 피커 디자인 최적화 -->
+                            <div class="relative w-9 h-9 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm flex-shrink-0">
+                                <input type="color" id="textColorPicker" value="#00F5D4" oninput="updateTextColor(this.value)" class="absolute -inset-1 w-12 h-12 cursor-pointer border-none p-0" />
+                            </div>
+                            <!-- 미니 파레트 -->
+                            <div class="flex gap-1 overflow-x-auto no-scrollbar">
+                                <button onclick="handleOSInteraction(); updateTextColor('#00F5D4')" class="w-5.5 h-5.5 rounded-full bg-neonMint border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                                <button onclick="handleOSInteraction(); updateTextColor('#FF007F')" class="w-5.5 h-5.5 rounded-full bg-neonPink border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                                <button onclick="handleOSInteraction(); updateTextColor('#00F0FF')" class="w-5.5 h-5.5 rounded-full bg-neonBlue border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                                <button onclick="handleOSInteraction(); updateTextColor('#FFFF00')" class="w-5.5 h-5.5 rounded-full bg-yellow-300 border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">배경 색상</label>
+                        <div class="flex items-center gap-1.5">
+                            <div class="relative w-9 h-9 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 shadow-sm flex-shrink-0">
+                                <input type="color" id="bgColorPicker" value="#000000" oninput="updateBgColor(this.value)" class="absolute -inset-1 w-12 h-12 cursor-pointer border-none p-0" />
+                            </div>
+                            <div class="flex gap-1 overflow-x-auto no-scrollbar">
+                                <button onclick="handleOSInteraction(); updateBgColor('#000000')" class="w-5.5 h-5.5 rounded-full bg-black border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                                <button onclick="handleOSInteraction(); updateBgColor('#000814')" class="w-5.5 h-5.5 rounded-full bg-slate-950 border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                                <button onclick="handleOSInteraction(); updateBgColor('#1E0030')" class="w-5.5 h-5.5 rounded-full bg-purple-950 border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                                <button onclick="handleOSInteraction(); updateBgColor('#0D1B2A')" class="w-5.5 h-5.5 rounded-full bg-cyan-950 border border-white hover:scale-110 active:scale-90 transition-transform"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 효과 & 속도 제어 -->
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">전광판 효과</label>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="handleOSInteraction(); setEffect('scroll-left')" id="btn-eff-left" class="effect-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">👈 흐르기</button>
+                        <button onclick="handleOSInteraction(); setEffect('scroll-right')" id="btn-eff-right" class="effect-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">흐르기 👉</button>
+                        <button onclick="handleOSInteraction(); setEffect('blink')" id="btn-eff-blink" class="effect-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">✨ 깜빡임</button>
+                        <button onclick="handleOSInteraction(); setEffect('static')" id="btn-eff-static" class="effect-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all active:scale-95">🛑 화면고정</button>
+                    </div>
+                </div>
+
+                <!-- 옵션 토글 묶음 -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex items-center justify-between py-2 px-3 bg-white dark:bg-darkCard border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm">
+                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">네온 글로우</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="neonToggle" checked onchange="handleOSInteraction(); toggleNeonGlow()" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-focus:ring-1 peer-focus:ring-neonMint dark:peer-focus:ring-neonMint peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-neonMint"></div>
+                        </label>
+                    </div>
+
+                    <div class="flex items-center justify-between py-2 px-3 bg-white dark:bg-darkCard border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm">
+                        <span class="text-xs font-bold text-gray-600 dark:text-gray-300">전광판 도트</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="dotOverlayToggle" onchange="handleOSInteraction(); toggleDotOverlay()" class="sr-only peer">
+                            <div class="w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-focus:ring-1 peer-focus:ring-neonMint dark:peer-focus:ring-neonMint peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-neonMint"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 속도 조절 슬라이더 -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">이동/깜빡임 속도</label>
+                        <span id="speedValue" class="text-xs font-black text-neonMint">기본 (5)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-running text-gray-400 text-xs"></i>
+                        <input type="range" id="speedSlider" min="1" max="10" value="5" oninput="updateSpeed(this.value)" 
+                               class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-neonMint" />
+                        <i class="fas fa-bolt text-gray-400 text-xs"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. 전체화면 시작 버튼 (iOS 홈바와 마찰되지 않는 여백 제공) -->
+            <div class="pt-3">
+                <button onclick="handleOSInteraction(); startFullscreen()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-neonMint to-teal-500 hover:opacity-95 text-black font-extrabold text-sm tracking-widest shadow-lg shadow-teal-500/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-play text-xs"></i> FULL SCREEN START
+                </button>
+            </div>
+        </div>
+
+        <!-- ==============================================
+             ② 전체화면 모드 오버레이 (FULL SCREEN MODE)
+             ============================================== -->
+        <div id="fullScreenOverlay" class="fixed inset-0 bg-black z-[9999] hidden flex items-center justify-center overflow-hidden">
+            <!-- LED 격자 텍스처 오버레이 -->
+            <div id="fullDotOverlay" class="absolute inset-0 led-dot-overlay pointer-events-none z-10 hidden"></div>
+
+            <!-- 터치 레이어 (터치 감지용 투명 오버레이) -->
+            <div onclick="handleOSInteraction(); toggleFullControl()" class="absolute inset-0 z-20"></div>
+
+            <!-- 흐르는 텍스트 컨테이너 -->
+            <div id="fullMarqueeContainer" class="w-full h-full flex items-center justify-center p-4">
+                <div id="fullText" class="marquee-content font-neon leading-none select-none text-neonMint" style="font-size: 15vh; --glow-color: #00F5D4;">
+                    전광판 앱
+                </div>
+            </div>
+
+            <!-- 상단 스마트 플로팅 메뉴바 (조작 오동작 방지, 3초후 서서히 사라짐) -->
+            <div id="fullControlMenu" class="absolute top-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 px-5 py-2 rounded-full bg-black/80 border border-white/15 text-white backdrop-blur-md transition-opacity duration-500">
+                <span class="text-[10px] font-bold text-gray-400">💡 화면을 탭하면 나가기 버튼이 보입니다</span>
+                <div class="h-3.5 w-px bg-white/20"></div>
+                <button onclick="handleOSInteraction(); exitFullscreen()" class="px-3.5 py-1.5 rounded-full bg-red-600 active:scale-90 text-[10px] font-black tracking-wider transition-all flex items-center gap-1">
+                    <i class="fas fa-power-off text-[9px]"></i> 종료
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 스크립트 비즈니스 로직 -->
+    <script>
+        // 전역 상태 객체
+        const state = {
+            text: "LED 전광판 앱",
+            fontClass: "font-neon",
+            textColor: "#00F5D4",
+            bgColor: "#000000",
+            effect: "scroll-left", 
+            speed: 5, 
+            isNeonGlow: true,
+            isDotOverlay: false,
+            darkMode: false
+        };
+
+        // DOM Elements
+        const elPreviewText = document.getElementById('previewText');
+        const elFullText = document.getElementById('fullText');
+        const elPreviewContainer = document.getElementById('previewContainer');
+        const elFullContainer = document.getElementById('fullScreenOverlay');
+        const elInputText = document.getElementById('inputText');
+        const elTextColorPicker = document.getElementById('textColorPicker');
+        const elBgColorPicker = document.getElementById('bgColorPicker');
+        const elPreviewOverlay = document.getElementById('previewOverlay');
+        const elFullDotOverlay = document.getElementById('fullFullOverlay');
+        const elSpeedValue = document.getElementById('speedValue');
+        const elBrowserThemeColor = document.getElementById('browserThemeColor');
+
+        let previewAnimationId = null;
+        let fullAnimationId = null;
+        let controlTimeout = null;
+
+        // 1. 갤럭시 진동 햅틱 피드백 제공 함수 (안드로이드만 지원)
+        function triggerHapticFeedback() {
+            if (navigator.vibrate) {
+                navigator.vibrate(12); // 아주 부드러운 탭 감각의 12ms 기기 진동 전달
+            }
+        }
+
+        // 아이폰/갤럭시 공통 인터랙션 대응 핸들러
+        function handleOSInteraction() {
+            triggerHapticFeedback();
+        }
+
+        // 2. 주소창 및 메타 크롬 동적 동기화 (갤럭시 최적화용)
+        function syncBrowserThemeColor() {
+            if (state.darkMode) {
+                // 다크모드 시 전광판 배경색 혹은 기본 딥 다크컬러 반영
+                elBrowserThemeColor.setAttribute('content', state.bgColor || '#0B0F19');
+            } else {
+                // 라이트모드 설정창 활성화시 상단 브라우저 영역 라이트하게 매칭
+                elBrowserThemeColor.setAttribute('content', '#FFFFFF');
+            }
+        }
+
+        // 3. 초기 기기별 테마 연동 및 설정
+        window.addEventListener('DOMContentLoaded', () => {
+            // 디바이스 테마 자동 감지 지원
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                toggleDarkMode(true);
+            } else {
+                updateUIState();
+                syncBrowserThemeColor();
+            }
+            syncStateToDOM();
+        });
+
+        // 4. 라이트/다크모드 설정 기능
+        function toggleDarkMode(forceDark = null) {
+            if (forceDark !== null) {
+                state.darkMode = forceDark;
+            } else {
+                state.darkMode = !state.darkMode;
+            }
+
+            const html = document.documentElement;
+            const icon = document.getElementById('themeIcon');
+            
+            if (state.darkMode) {
+                html.classList.add('dark');
+                icon.className = 'fas fa-sun text-xs';
+            } else {
+                html.classList.remove('dark');
+                icon.className = 'fas fa-moon text-xs';
+            }
+            updateUIState();
+            syncBrowserThemeColor();
+        }
+
+        // 5. 문구 갱신 & 초기화
+        function updateText() {
+            state.text = elInputText.value || "";
+            syncStateToDOM();
+        }
+
+        function clearText() {
+            elInputText.value = "";
+            state.text = "";
+            syncStateToDOM();
+        }
+
+        // 6. 타이포 스타일 칩 변경
+        function setFont(fontClass) {
+            state.fontClass = fontClass;
+            updateUIState();
+            syncStateToDOM();
+        }
+
+        // 7. 컬러 동적 매칭 연산
+        function updateTextColor(color) {
+            state.textColor = color;
+            elTextColorPicker.value = color;
+            syncStateToDOM();
+        }
+
+        function updateBgColor(color) {
+            state.bgColor = color;
+            elBgColorPicker.value = color;
+            syncStateToDOM();
+            syncBrowserThemeColor();
+        }
+
+        // 8. 트랜지션 효과 설정
+        function setEffect(effect) {
+            state.effect = effect;
+            updateUIState();
+            syncStateToDOM();
+        }
+
+        function toggleNeonGlow() {
+            state.isNeonGlow = document.getElementById('neonToggle').checked;
+            syncStateToDOM();
+        }
+
+        function toggleDotOverlay() {
+            state.isDotOverlay = document.getElementById('dotOverlayToggle').checked;
+            const previewOvl = document.getElementById('previewOverlay');
+            const fullOvl = document.getElementById('fullDotOverlay');
+            if (state.isDotOverlay) {
+                previewOvl.classList.remove('hidden');
+                fullOvl.classList.remove('hidden');
+            } else {
+                previewOvl.classList.add('hidden');
+                fullOvl.classList.add('hidden');
+            }
+        }
+
+        function updateSpeed(val) {
+            state.speed = parseInt(val);
+            let speedText = '보통';
+            if (state.speed <= 3) speedText = '느림';
+            else if (state.speed >= 8) speedText = '아주 빠름';
+            else if (state.speed > 5) speedText = '빠름';
+            elSpeedValue.textContent = `${speedText} (${state.speed})`;
+            syncStateToDOM();
+        }
+
+        // 9. 프리셋 적용 매크로
+        function applyPreset(text, textCol, bgCol, font, effect, speed) {
+            elInputText.value = text;
+            state.text = text;
+            state.textColor = textCol;
+            state.bgColor = bgCol;
+            state.fontClass = font;
+            state.effect = effect;
+            state.speed = speed;
+            
+            elTextColorPicker.value = textCol;
+            elBgColorPicker.value = bgCol;
+            document.getElementById('speedSlider').value = speed;
+            updateSpeed(speed);
+
+            updateUIState();
+            syncStateToDOM();
+            syncBrowserThemeColor();
+        }
+
+        // UI 칩 컴포넌트 활성 엣지 렌더링 업데이트 (iOS/AOS 세련된 쉐입 튜닝)
+        function updateUIState() {
+            // 글꼴 스타일 칩 클렌징 및 활성화
+            document.querySelectorAll('.font-chip').forEach(btn => {
+                btn.className = "font-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all dark:border-gray-800 bg-white dark:bg-darkCard text-gray-500 dark:text-gray-400 border-gray-200";
+            });
+            const activeFontBtn = document.getElementById(`btn-${state.fontClass}`);
+            if (activeFontBtn) {
+                activeFontBtn.className = "font-chip py-2.5 px-1 rounded-lg text-xs font-black text-center border bg-teal-50 dark:bg-teal-950/20 text-teal-600 dark:text-teal-400 border-neonMint shadow-sm";
+            }
+
+            // 효과 칩 클렌징 및 활성화
+            document.querySelectorAll('.effect-chip').forEach(btn => {
+                btn.className = "effect-chip py-2.5 px-1 rounded-lg text-xs font-bold text-center border transition-all dark:border-gray-800 bg-white dark:bg-darkCard text-gray-500 dark:text-gray-400 border-gray-200";
+            });
+            const activeEffBtn = document.getElementById(`btn-eff-${state.effect.replace('scroll-', '')}`);
+            if (activeEffBtn) {
+                activeEffBtn.className = "effect-chip py-2.5 px-1 rounded-lg text-xs font-black text-center border bg-teal-50 dark:bg-teal-950/20 text-teal-600 dark:text-teal-400 border-neonMint shadow-sm";
+            }
+        }
+
+        // 텍스트 구조 동기화 핵심 애니메이션 시스템
+        function syncStateToDOM() {
+            [
+                { container: 'previewMarqueeContainer', textEl: 'previewText', isFull: false },
+                { container: 'fullMarqueeContainer', textEl: 'fullText', isFull: true }
+            ].forEach(({ container, textEl, isFull }) => {
+                const cEl = document.getElementById(container);
+                const tEl = document.getElementById(textEl);
+
+                // 문구 삽입
+                tEl.innerText = state.text;
+
+                // 폰트 및 광원 연산
+                tEl.className = `marquee-content ${state.fontClass} select-none leading-none`;
+                tEl.style.color = state.textColor;
+                tEl.style.setProperty('--glow-color', state.textColor);
+
+                if (state.isNeonGlow) {
+                    tEl.classList.add('neon-glow-active');
+                }
+
+                // 기기별 전체화면 배경 대응
+                if (!isFull) {
+                    elPreviewContainer.style.backgroundColor = state.bgColor;
+                } else {
+                    elFullContainer.style.backgroundColor = state.bgColor;
+                }
+
+                resetAndStartAnimation(cEl, tEl, isFull);
+            });
+        }
+
+        // 고밀도 프레임 애니메이션 렌더러
+        function resetAndStartAnimation(container, element, isFull) {
+            if (isFull && fullAnimationId) cancelAnimationFrame(fullAnimationId);
+            if (!isFull && previewAnimationId) cancelAnimationFrame(previewAnimationId);
+
+            element.style.transform = `translateX(0px)`;
+            element.style.opacity = '1';
+
+            const containerWidth = container.offsetWidth;
+            const elementWidth = element.offsetWidth;
+
+            let currentPos = 0;
+            let tick = 0;
+
+            if (state.effect === 'scroll-left') {
+                container.style.justifyContent = 'flex-start';
+                const step = state.speed * 0.45 + 0.6; 
+                currentPos = containerWidth;
+
+                function renderScrollLeft() {
+                    currentPos -= step;
+                    if (currentPos < -elementWidth) {
+                        currentPos = containerWidth;
+                    }
+                    element.style.transform = `translateX(${currentPos}px)`;
+                    
+                    if (isFull) fullAnimationId = requestAnimationFrame(renderScrollLeft);
+                    else previewAnimationId = requestAnimationFrame(renderScrollLeft);
+                }
+                
+                if (isFull) fullAnimationId = requestAnimationFrame(renderScrollLeft);
+                else previewAnimationId = requestAnimationFrame(renderScrollLeft);
+
+            } else if (state.effect === 'scroll-right') {
+                container.style.justifyContent = 'flex-start';
+                const step = state.speed * 0.45 + 0.6;
+                currentPos = -elementWidth;
+
+                function renderScrollRight() {
+                    currentPos += step;
+                    if (currentPos > containerWidth) {
+                        currentPos = -elementWidth;
+                    }
+                    element.style.transform = `translateX(${currentPos}px)`;
+
+                    if (isFull) fullAnimationId = requestAnimationFrame(renderScrollRight);
+                    else previewAnimationId = requestAnimationFrame(renderScrollRight);
+                }
+
+                if (isFull) fullAnimationId = requestAnimationFrame(renderScrollRight);
+                else previewAnimationId = requestAnimationFrame(renderScrollRight);
+
+            } else if (state.effect === 'blink') {
+                element.style.transform = `translateX(0px)`;
+                container.style.justifyContent = 'center';
+
+                // 고정밀 깜빡임 타임슬롯 매칭
+                const blinkThreshold = Math.max(5, 60 - (state.speed * 5.5)); 
+
+                function renderBlink() {
+                    tick++;
+                    if (Math.floor(tick / blinkThreshold) % 2 === 0) {
+                        element.style.opacity = '1';
+                    } else {
+                        element.style.opacity = '0';
+                    }
+
+                    if (isFull) fullAnimationId = requestAnimationFrame(renderBlink);
+                    else previewAnimationId = requestAnimationFrame(renderBlink);
+                }
+
+                if (isFull) fullAnimationId = requestAnimationFrame(renderBlink);
+                else previewAnimationId = requestAnimationFrame(renderBlink);
+            } else if (state.effect === 'static') {
+                // 화면 고정
+                element.style.transform = `translateX(0px)`;
+                element.style.opacity = '1';
+                container.style.justifyContent = 'center';
+            }
+        }
+
+        // 10. 전체화면 모드 처리 (아이폰 노치 / 갤럭시 전체 확장 통합 제어)
+        function startFullscreen() {
+            const overlay = document.getElementById('fullScreenOverlay');
+            overlay.classList.remove('hidden');
+
+            // 브라우저 하단 네비게이션 강제 숨김 처리 API 연동
+            const docEl = document.documentElement;
+            if (docEl.requestFullscreen) {
+                docEl.requestFullscreen().catch(() => {});
+            } else if (docEl.webkitRequestFullscreen) { /* Safari */
+                docEl.webkitRequestFullscreen();
+            }
+
+            // 가로 회전 강제 CSS 매핑
+            detectAndForceLandscape(true);
+
+            setTimeout(() => {
+                syncStateToDOM();
+                triggerFullControlAutoClose();
+                // 전체화면 돌입 시 브라우저 상단바 색상 LED 색상으로 치환
+                elBrowserThemeColor.setAttribute('content', state.bgColor);
+            }, 150);
+        }
+
+        function exitFullscreen() {
+            const overlay = document.getElementById('fullScreenOverlay');
+            overlay.classList.add('hidden');
+
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+
+            detectAndForceLandscape(false);
+
+            setTimeout(() => {
+                syncStateToDOM();
+                syncBrowserThemeColor();
+            }, 100);
+        }
+
+        // 가로 강제 회전 감지 모듈 (아이폰/갤럭시 세로 고정 유저 대응)
+        function detectAndForceLandscape(isEnable) {
+            const overlay = document.getElementById('fullScreenOverlay');
+            if (isEnable) {
+                // 세로 화면일 경우 인위적인 회전 가속 매핑
+                if (window.innerHeight > window.innerWidth) {
+                    overlay.classList.add('force-landscape');
+                } else {
+                    overlay.classList.remove('force-landscape');
+                }
+            } else {
+                overlay.classList.remove('force-landscape');
+            }
+        }
+
+        // 기기 방향 변경 추적 콜백 등록 (iPhone 노션 화면 변환 완벽 대응)
+        window.addEventListener('resize', () => {
+            const overlay = document.getElementById('fullScreenOverlay');
+            if (!overlay.classList.contains('hidden')) {
+                detectAndForceLandscape(true);
+                syncStateToDOM();
+            }
+        });
+
+        // 11. 전체화면 조작 편의 바 제어 (상호작용 3초 후 페이드아웃)
+        function toggleFullControl() {
+            const ctrl = document.getElementById('fullControlMenu');
+            if (ctrl.style.opacity === '0') {
+                ctrl.style.opacity = '1';
+                ctrl.style.pointerEvents = 'auto';
+                triggerFullControlAutoClose();
+            } else {
+                ctrl.style.opacity = '0';
+                ctrl.style.pointerEvents = 'none';
+            }
+        }
+
+        function triggerFullControlAutoClose() {
+            if (controlTimeout) clearTimeout(controlTimeout);
+            controlTimeout = setTimeout(() => {
+                const ctrl = document.getElementById('fullControlMenu');
+                if (ctrl) {
+                    ctrl.style.opacity = '0';
+                    ctrl.style.pointerEvents = 'none';
+                }
+            }, 3000); 
+        }
+    </script>
+</body>
+</html>
